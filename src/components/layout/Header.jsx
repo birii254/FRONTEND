@@ -48,7 +48,7 @@ const Header = () => {
               <div className="w-10 h-10 matrix-gradient rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform duration-200">
                 <i className="fas fa-cube text-white text-lg"></i>
               </div>
-              <span className="text-2xl font-bold gradient-text">Matrix</span>
+              <span className="text-2xl font-bold gradient-text">Matrix Nexus</span>
             </Link>
 
             {/* Search Bar - Desktop */}
