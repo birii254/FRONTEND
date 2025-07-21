@@ -1,78 +1,86 @@
-import React from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { useForm } from 'react-hook-form'
-import { motion } from 'framer-motion'
-import { useAuthStore } from '../store/authStore'
-import Button from '../components/ui/Button'
-import { showToast } from '../components/ui/Toast'
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { useAuthStore } from '../store/authStore';
+import { useToast } from '../components/ui/Toast';
 
 const Signup = () => {
-  const navigate = useNavigate()
-  const { register: registerUser, isLoading, error, clearError } = useAuthStore()
+  const navigate = useNavigate();
+  const { register: registerUser, isLoading, error, clearError } = useAuthStore();
+  const { showToast } = useToast();
+  const [profilePicture, setProfilePicture] = useState(null);
 
   const { 
     register, 
     handleSubmit, 
     formState: { errors }, 
-    watch
-  } = useForm()
+    watch,
+    reset
+  } = useForm();
 
-  const password = watch('password1')
+  const password = watch('password1');
 
   const onSubmit = async (data) => {
-    clearError()
+    clearError();
+
+    // Prepare form data
+    const formData = {
+      ...data,
+      profile_picture: profilePicture
+    };
     
-    const result = await registerUser(data)
+    const result = await registerUser(formData);
     
     if (result.success) {
-      showToast.success('Account created successfully! Please sign in.')
-      navigate('/login')
+      showToast('Registration successful!', 'success');
+      reset();
+      setProfilePicture(null);
+      
+      if (result.requiresLogin) {
+        // Registration successful but requires login
+        setTimeout(() => {
+          navigate('/login', {
+            state: { 
+              message: 'Account created successfully! Please sign in.' 
+            }
+          });
+        }, 1500);
+      } else {
+        // Auto-logged in, redirect to dashboard
+        setTimeout(() => {
+          navigate('/dashboard');
+        }, 1500);
+      }
     } else {
-      showToast.error(result.error || 'Registration failed')
+      showToast(result.error || 'Registration failed. Please try again.', 'error');
     }
-  }
+  };
+
+  const handleFileChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      setProfilePicture(e.target.files[0]);
+    }
+  };
 
   return (
-    <div className="min-h-[calc(100vh-200px)] flex items-center justify-center bg-gradient-to-br from-primary-50 to-matrix-50 py-12 px-4 sm:px-6 lg:px-8">
-      <motion.div 
-        className="max-w-md w-full space-y-8 bg-white p-8 rounded-2xl shadow-xl border border-gray-100"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-      >
+    <div className="min-h-[calc(100vh-200px)] flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-xl shadow-md">
         {/* Header */}
-        <motion.div 
-          className="text-center"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-        >
-          <motion.div 
-            className="mx-auto w-16 h-16 bg-gradient-to-br from-primary-500 to-primary-700 rounded-2xl flex items-center justify-center mb-4"
-            whileHover={{ scale: 1.05, rotate: 5 }}
-            transition={{ duration: 0.2 }}
-          >
+        <div className="text-center">
+          <div className="mx-auto w-16 h-16 bg-gradient-to-br from-primary-500 to-primary-700 rounded-2xl flex items-center justify-center mb-4">
             <i className="fas fa-store text-white text-2xl"></i>
-          </motion.div>
+          </div>
           <h2 className="text-3xl font-bold text-gray-900">Create your account</h2>
           <p className="mt-2 text-gray-600">Join our marketplace community</p>
-        </motion.div>
+        </div>
+
+        {/* Success Message */}
 
         {/* Form */}
-        <motion.form 
-          onSubmit={handleSubmit(onSubmit)} 
-          className="mt-8 space-y-6"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-        >
+        <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-6">
           <div className="grid grid-cols-1 gap-4">
             {/* Username */}
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.5, delay: 0.3 }}
-            >
+            <div>
               <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
                 Username *
               </label>
@@ -84,28 +92,22 @@ const Signup = () => {
                   minLength: {
                     value: 4,
                     message: 'Username must be at least 4 characters'
+                  },
+                  maxLength: {
+                    value: 150,
+                    message: 'Username cannot exceed 150 characters'
                   }
                 })}
-                className={`w-full py-3 px-4 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all duration-200 ${errors.username ? 'border-red-300 focus:ring-red-500' : 'border-gray-300'}`}
+                className={`input-field ${errors.username ? 'border-red-300' : 'border-gray-300'}`}
                 placeholder="johndoe"
               />
               {errors.username && (
-                <motion.p 
-                  className="mt-1 text-sm text-red-600"
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                >
-                  {errors.username.message}
-                </motion.p>
+                <p className="mt-1 text-sm text-red-600">{errors.username.message}</p>
               )}
-            </motion.div>
+            </div>
 
             {/* Email */}
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.5, delay: 0.4 }}
-            >
+            <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
                 Email Address *
               </label>
@@ -119,27 +121,17 @@ const Signup = () => {
                     message: 'Invalid email address'
                   }
                 })}
-                className={`w-full py-3 px-4 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all duration-200 ${errors.email ? 'border-red-300 focus:ring-red-500' : 'border-gray-300'}`}
+                className={`input-field ${errors.email ? 'border-red-300' : 'border-gray-300'}`}
                 placeholder="john@example.com"
               />
               {errors.email && (
-                <motion.p 
-                  className="mt-1 text-sm text-red-600"
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                >
-                  {errors.email.message}
-                </motion.p>
+                <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
               )}
-            </motion.div>
+            </div>
 
             {/* Name Fields */}
-            <div className="grid grid-cols-2 gap-4">
-              <motion.div
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.5, delay: 0.5 }}
-              >
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
                 <label htmlFor="first_name" className="block text-sm font-medium text-gray-700 mb-1">
                   First Name *
                 </label>
@@ -147,27 +139,21 @@ const Signup = () => {
                   id="first_name"
                   type="text"
                   {...register('first_name', { 
-                    required: 'First name is required'
+                    required: 'First name is required',
+                    maxLength: {
+                      value: 30,
+                      message: 'First name cannot exceed 30 characters'
+                    }
                   })}
-                  className={`w-full py-3 px-4 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all duration-200 ${errors.first_name ? 'border-red-300 focus:ring-red-500' : 'border-gray-300'}`}
+                  className={`input-field ${errors.first_name ? 'border-red-300' : 'border-gray-300'}`}
                   placeholder="John"
                 />
                 {errors.first_name && (
-                  <motion.p 
-                    className="mt-1 text-sm text-red-600"
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                  >
-                    {errors.first_name.message}
-                  </motion.p>
+                  <p className="mt-1 text-sm text-red-600">{errors.first_name.message}</p>
                 )}
-              </motion.div>
+              </div>
 
-              <motion.div
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.5, delay: 0.6 }}
-              >
+              <div>
                 <label htmlFor="last_name" className="block text-sm font-medium text-gray-700 mb-1">
                   Last Name *
                 </label>
@@ -175,29 +161,102 @@ const Signup = () => {
                   id="last_name"
                   type="text"
                   {...register('last_name', { 
-                    required: 'Last name is required'
+                    required: 'Last name is required',
+                    maxLength: {
+                      value: 30,
+                      message: 'Last name cannot exceed 30 characters'
+                    }
                   })}
-                  className={`w-full py-3 px-4 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all duration-200 ${errors.last_name ? 'border-red-300 focus:ring-red-500' : 'border-gray-300'}`}
+                  className={`input-field ${errors.last_name ? 'border-red-300' : 'border-gray-300'}`}
                   placeholder="Doe"
                 />
                 {errors.last_name && (
-                  <motion.p 
-                    className="mt-1 text-sm text-red-600"
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                  >
-                    {errors.last_name.message}
-                  </motion.p>
+                  <p className="mt-1 text-sm text-red-600">{errors.last_name.message}</p>
                 )}
-              </motion.div>
+              </div>
+            </div>
+
+            {/* Phone Number */}
+            <div>
+              <label htmlFor="phone_number" className="block text-sm font-medium text-gray-700 mb-1">
+                Phone Number
+              </label>
+              <input
+                id="phone_number"
+                type="tel"
+                {...register('phone_number', {
+                  pattern: {
+                    value: /^\+?[1-9]\d{1,14}$/,
+                    message: 'Enter a valid phone number (e.g., +1234567890)'
+                  }
+                })}
+                className={`input-field ${errors.phone_number ? 'border-red-300' : 'border-gray-300'}`}
+                placeholder="+254712345678"
+              />
+              {errors.phone_number && (
+                <p className="mt-1 text-sm text-red-600">{errors.phone_number.message}</p>
+              )}
+            </div>
+
+            {/* Profile Picture */}
+            <div>
+              <label htmlFor="profile_picture" className="block text-sm font-medium text-gray-700 mb-1">
+                Profile Picture
+              </label>
+              <div className="flex items-center">
+                <input
+                  id="profile_picture"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+                <label
+                  htmlFor="profile_picture"
+                  className="flex-1 cursor-pointer input-field border-dashed flex items-center justify-center"
+                >
+                  {profilePicture ? (
+                    <span className="text-primary-600">{profilePicture.name}</span>
+                  ) : (
+                    <span className="text-gray-500">Choose a file (optional)</span>
+                  )}
+                </label>
+                {profilePicture && (
+                  <button
+                    type="button"
+                    onClick={() => setProfilePicture(null)}
+                    className="ml-2 p-2 text-red-600 hover:text-red-700"
+                  >
+                    <i className="fas fa-times"></i>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Location */}
+            <div>
+              <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-1">
+                Location
+              </label>
+              <input
+                id="location"
+                type="text"
+                {...register('location', {
+                  maxLength: {
+                    value: 100,
+                    message: 'Location cannot exceed 100 characters'
+                  }
+                })}
+                className={`input-field ${errors.location ? 'border-red-300' : 'border-gray-300'}`}
+                placeholder="Nairobi, Kenya"
+              />
+              {errors.location && (
+                <p className="mt-1 text-sm text-red-600">{errors.location.message}</p>
+              )}
             </div>
 
             {/* Password */}
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.5, delay: 0.7 }}
-            >
+            <div>
               <label htmlFor="password1" className="block text-sm font-medium text-gray-700 mb-1">
                 Password *
               </label>
@@ -211,26 +270,16 @@ const Signup = () => {
                     message: 'Password must be at least 8 characters'
                   }
                 })}
-                className={`w-full py-3 px-4 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all duration-200 ${errors.password1 ? 'border-red-300 focus:ring-red-500' : 'border-gray-300'}`}
+                className={`input-field ${errors.password1 ? 'border-red-300' : 'border-gray-300'}`}
                 placeholder="••••••••"
               />
               {errors.password1 && (
-                <motion.p 
-                  className="mt-1 text-sm text-red-600"
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                >
-                  {errors.password1.message}
-                </motion.p>
+                <p className="mt-1 text-sm text-red-600">{errors.password1.message}</p>
               )}
-            </motion.div>
+            </div>
 
             {/* Confirm Password */}
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.5, delay: 0.8 }}
-            >
+            <div>
               <label htmlFor="password2" className="block text-sm font-medium text-gray-700 mb-1">
                 Confirm Password *
               </label>
@@ -241,69 +290,119 @@ const Signup = () => {
                   required: 'Please confirm your password',
                   validate: value => value === password || 'Passwords do not match'
                 })}
-                className={`w-full py-3 px-4 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all duration-200 ${errors.password2 ? 'border-red-300 focus:ring-red-500' : 'border-gray-300'}`}
+                className={`input-field ${errors.password2 ? 'border-red-300' : 'border-gray-300'}`}
                 placeholder="••••••••"
               />
               {errors.password2 && (
-                <motion.p 
-                  className="mt-1 text-sm text-red-600"
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                >
-                  {errors.password2.message}
-                </motion.p>
+                <p className="mt-1 text-sm text-red-600">{errors.password2.message}</p>
               )}
-            </motion.div>
+            </div>
 
-            {/* Error Message */}
-            {error && (
-              <motion.div 
-                className="bg-red-50 border border-red-200 rounded-xl p-4"
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.3 }}
-              >
-                <div className="flex items-center">
-                  <i className="fas fa-exclamation-triangle text-red-600 mr-2"></i>
-                  <p className="text-sm text-red-700">{error}</p>
-                </div>
-              </motion.div>
+            {/* Terms Checkbox */}
+            <div className="flex items-start">
+              <div className="flex items-center h-5">
+                <input
+                  id="terms"
+                  type="checkbox"
+                  {...register('terms', { 
+                    required: 'You must accept the terms and conditions' 
+                  })}
+                  className="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300 rounded"
+                />
+              </div>
+              <div className="ml-3 text-sm">
+                <label htmlFor="terms" className="font-medium text-gray-700">
+                  I agree to the{' '}
+                  <Link to="/terms" className="text-primary-600 hover:text-primary-500">
+                    Terms of Service
+                  </Link>{' '}
+                  and{' '}
+                  <Link to="/privacy" className="text-primary-600 hover:text-primary-500">
+                    Privacy Policy
+                  </Link>
+                </label>
+              </div>
+            </div>
+            {errors.terms && (
+              <p className="mt-1 text-sm text-red-600">{errors.terms.message}</p>
             )}
-
-            {/* Submit Button */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.9 }}
-            >
-              <Button
-                type="submit"
-                loading={isLoading}
-                className="w-full"
-              >
-                {isLoading ? 'Creating Account...' : 'Create Account'}
-              </Button>
-            </motion.div>
           </div>
-        </motion.form>
+
+          {/* Error Message */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+              <div className="flex items-center">
+                <i className="fas fa-exclamation-triangle text-red-600 mr-2"></i>
+                <h3 className="font-semibold text-red-900">Registration Error</h3>
+              </div>
+              <p className="mt-1 text-sm text-red-700 whitespace-pre-line">{error.message}</p>
+            </div>
+          )}
+
+          {/* Submit Button */}
+          <div>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className={`w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 ${
+                isLoading ? 'opacity-70 cursor-not-allowed' : ''
+              }`}
+            >
+              {isLoading ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Processing...
+                </>
+              ) : (
+                'Create Account'
+              )}
+            </button>
+          </div>
+        </form>
+
+        {/* Divider */}
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-300"></div>
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="px-2 bg-white text-gray-500">Or continue with</span>
+          </div>
+        </div>
+
+        {/* Social Login Buttons */}
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+          >
+            <i className="fab fa-google text-red-500 mr-2"></i>
+            Google
+          </button>
+          <button
+            type="button"
+            className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+          >
+            <i className="fab fa-facebook-f text-blue-600 mr-2"></i>
+            Facebook
+          </button>
+        </div>
 
         {/* Login Link */}
-        <motion.div 
-          className="text-center text-sm"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.5, delay: 1 }}
-        >
+        <div className="text-center text-sm">
           <p className="text-gray-600">
             Already have an account?{' '}
-            <Link to="/login" className="font-medium text-primary-600 hover:text-primary-500 transition-colors duration-200">
+            <Link to="/login" className="font-medium text-primary-600 hover:text-primary-500">
               Sign in
             </Link>
           </p>
-        </motion.div>
-      </motion.div>
+        </div>
+      </div>
     </div>
-  )
-}
+  );
+};
 
-export default Signup
+export default Signup;
