@@ -1,14 +1,21 @@
 import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
-import { authAPI } from '../services/api'
+import axios from 'axios'
 
 const Signup = () => {
   const navigate = useNavigate()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+  const [profilePicture, setProfilePicture] = useState(null)
 
-  const { register, handleSubmit, formState: { errors }, watch } = useForm()
+  const { 
+    register, 
+    handleSubmit, 
+    formState: { errors }, 
+    watch 
+  } = useForm()
+
   const password = watch('password1')
 
   const onSubmit = async (data) => {
@@ -16,20 +23,66 @@ const Signup = () => {
     setError('')
     
     try {
-      await authAPI.signup(data)
+      // Create FormData for file upload
+      const formData = new FormData()
+      
+      // Append all form fields
+      Object.keys(data).forEach(key => {
+        if (key !== 'profile_picture') {
+          formData.append(key, data[key])
+        }
+      })
+      
+      // Append profile picture if exists
+      if (profilePicture) {
+        formData.append('profile_picture', profilePicture)
+      }
+
+      // Make API request to your Django backend
+      const response = await axios.post(
+        'https://birii.onrender.com/api/signup/', 
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          }
+        }
+      )
+
+      // Handle successful registration
       navigate('/login', { 
-        state: { message: 'Account created successfully! Please sign in.' }
+        state: { 
+          message: 'Account created successfully! Please sign in.' 
+        }
       })
     } catch (err) {
-      const errorData = err.response?.data
-      if (errorData) {
-        const errorMessages = Object.values(errorData).flat().join(' ')
-        setError(errorMessages)
+      // Handle errors from Django backend
+      if (err.response) {
+        // Django returns errors in this format: { field: ["error1", "error2"] }
+        const errorData = err.response.data
+        let errorMessage = ''
+
+        // Format Django errors into a readable string
+        if (typeof errorData === 'object') {
+          for (const key in errorData) {
+            errorMessage += `${key}: ${errorData[key].join(' ')}\n`
+          }
+        } else {
+          errorMessage = errorData || 'Registration failed. Please try again.'
+        }
+
+        setError(errorMessage.trim())
       } else {
-        setError('Registration failed. Please try again.')
+        setError('Network error. Please check your connection and try again.')
       }
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleFileChange = (e) => {
+    if (e.target.files.length > 0) {
+      setProfilePicture(e.target.files[0])
     }
   }
 
@@ -48,22 +101,6 @@ const Signup = () => {
         {/* Form */}
         <div className="card p-8">
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-            <div>
-              <label className="block text-sm font-semibold text-gray-900 mb-2">
-                <i className="fas fa-user text-primary-600 mr-2"></i>
-                Username
-              </label>
-              <input
-                type="text"
-                {...register('username', { required: 'Username is required' })}
-                className="input-field"
-                placeholder="Choose a unique username"
-              />
-              {errors.username && (
-                <p className="mt-1 text-sm text-red-600">{errors.username.message}</p>
-              )}
-            </div>
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
@@ -72,7 +109,13 @@ const Signup = () => {
                 </label>
                 <input
                   type="text"
-                  {...register('first_name', { required: 'First name is required' })}
+                  {...register('first_name', { 
+                    required: 'First name is required',
+                    maxLength: {
+                      value: 30,
+                      message: 'First name cannot exceed 30 characters'
+                    }
+                  })}
                   className="input-field"
                   placeholder="Enter your first name"
                 />
@@ -87,7 +130,13 @@ const Signup = () => {
                 </label>
                 <input
                   type="text"
-                  {...register('last_name', { required: 'Last name is required' })}
+                  {...register('last_name', { 
+                    required: 'Last name is required',
+                    maxLength: {
+                      value: 30,
+                      message: 'Last name cannot exceed 30 characters'
+                    }
+                  })}
                   className="input-field"
                   placeholder="Enter your last name"
                 />
@@ -95,6 +144,28 @@ const Signup = () => {
                   <p className="mt-1 text-sm text-red-600">{errors.last_name.message}</p>
                 )}
               </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-900 mb-2">
+                <i className="fas fa-user text-primary-600 mr-2"></i>
+                Username
+              </label>
+              <input
+                type="text"
+                {...register('username', { 
+                  required: 'Username is required',
+                  minLength: {
+                    value: 4,
+                    message: 'Username must be at least 4 characters'
+                  }
+                })}
+                className="input-field"
+                placeholder="Choose a unique username"
+              />
+              {errors.username && (
+                <p className="mt-1 text-sm text-red-600">{errors.username.message}</p>
+              )}
             </div>
 
             <div>
@@ -122,13 +193,34 @@ const Signup = () => {
             <div>
               <label className="block text-sm font-semibold text-gray-900 mb-2">
                 <i className="fas fa-phone text-primary-600 mr-2"></i>
-                Phone Number (Optional)
+                Phone Number
               </label>
               <input
                 type="tel"
-                {...register('phone_number')}
+                {...register('phone_number', {
+                  pattern: {
+                    value: /^\+?[1-9]\d{1,14}$/,
+                    message: 'Enter a valid phone number (e.g., +1234567890)'
+                  }
+                })}
                 className="input-field"
-                placeholder="Enter your phone number"
+                placeholder="+1234567890"
+              />
+              {errors.phone_number && (
+                <p className="mt-1 text-sm text-red-600">{errors.phone_number.message}</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-900 mb-2">
+                <i className="fas fa-image text-primary-600 mr-2"></i>
+                Profile Picture (Optional)
+              </label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="input-field"
               />
             </div>
 
@@ -139,10 +231,18 @@ const Signup = () => {
               </label>
               <input
                 type="text"
-                {...register('location')}
+                {...register('location', {
+                  maxLength: {
+                    value: 100,
+                    message: 'Location cannot exceed 100 characters'
+                  }
+                })}
                 className="input-field"
                 placeholder="Enter your city/location"
               />
+              {errors.location && (
+                <p className="mt-1 text-sm text-red-600">{errors.location.message}</p>
+              )}
             </div>
 
             <div>
@@ -215,7 +315,7 @@ const Signup = () => {
                   <i className="fas fa-exclamation-triangle text-red-600 mr-2"></i>
                   <h3 className="font-semibold text-red-900">Registration failed</h3>
                 </div>
-                <p className="text-sm text-red-700">{error}</p>
+                <p className="text-sm text-red-700 whitespace-pre-line">{error}</p>
               </div>
             )}
 
@@ -247,11 +347,17 @@ const Signup = () => {
             </div>
 
             <div className="mt-6 grid grid-cols-2 gap-3">
-              <button className="w-full inline-flex justify-center py-3 px-4 border border-gray-300 rounded-lg bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 transition-colors duration-200">
+              <button 
+                type="button"
+                className="w-full inline-flex justify-center py-3 px-4 border border-gray-300 rounded-lg bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 transition-colors duration-200"
+              >
                 <i className="fab fa-google text-red-500 mr-2"></i>
                 Google
               </button>
-              <button className="w-full inline-flex justify-center py-3 px-4 border border-gray-300 rounded-lg bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 transition-colors duration-200">
+              <button 
+                type="button"
+                className="w-full inline-flex justify-center py-3 px-4 border border-gray-300 rounded-lg bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 transition-colors duration-200"
+              >
                 <i className="fab fa-facebook text-blue-600 mr-2"></i>
                 Facebook
               </button>
