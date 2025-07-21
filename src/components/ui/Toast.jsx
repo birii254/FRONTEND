@@ -1,83 +1,89 @@
-import React, { useState, useEffect } from 'react'
-import { createPortal } from 'react-dom'
+import React from 'react'
+import toast, { Toaster } from 'react-hot-toast'
 
-const Toast = ({ message, type = 'success', isVisible, onClose, duration = 5000 }) => {
-  useEffect(() => {
-    if (isVisible && duration > 0) {
-      const timer = setTimeout(() => {
-        onClose()
-      }, duration)
-      
-      return () => clearTimeout(timer)
-    }
-  }, [isVisible, duration, onClose])
-
-  if (!isVisible) return null
-
-  const typeStyles = {
-    success: 'bg-green-500 text-white',
-    error: 'bg-red-500 text-white',
-    warning: 'bg-yellow-500 text-white',
-    info: 'bg-blue-500 text-white'
-  }
-
-  const icons = {
-    success: 'fas fa-check-circle',
-    error: 'fas fa-exclamation-circle',
-    warning: 'fas fa-exclamation-triangle',
-    info: 'fas fa-info-circle'
-  }
-
-  return createPortal(
-    <div className="fixed top-4 right-4 z-50 animate-slide-up">
-      <div className={`
-        ${typeStyles[type]} 
-        px-6 py-4 rounded-xl shadow-lg flex items-center space-x-3 min-w-80 max-w-md
-      `}>
-        <i className={`${icons[type]} text-lg`}></i>
-        <span className="flex-1">{message}</span>
-        <button
-          onClick={onClose}
-          className="text-white/80 hover:text-white transition-colors duration-200"
-        >
-          <i className="fas fa-times"></i>
-        </button>
-      </div>
-    </div>,
-    document.body
-  )
+// Custom toast functions
+export const showToast = {
+  success: (message) => toast.success(message, {
+    duration: 4000,
+    position: 'top-right',
+    style: {
+      background: '#10B981',
+      color: '#fff',
+      borderRadius: '12px',
+      padding: '16px',
+    },
+    iconTheme: {
+      primary: '#fff',
+      secondary: '#10B981',
+    },
+  }),
+  
+  error: (message) => toast.error(message, {
+    duration: 5000,
+    position: 'top-right',
+    style: {
+      background: '#EF4444',
+      color: '#fff',
+      borderRadius: '12px',
+      padding: '16px',
+    },
+    iconTheme: {
+      primary: '#fff',
+      secondary: '#EF4444',
+    },
+  }),
+  
+  loading: (message) => toast.loading(message, {
+    position: 'top-right',
+    style: {
+      background: '#3B82F6',
+      color: '#fff',
+      borderRadius: '12px',
+      padding: '16px',
+    },
+  }),
+  
+  promise: (promise, messages) => toast.promise(promise, messages, {
+    position: 'top-right',
+    style: {
+      borderRadius: '12px',
+      padding: '16px',
+    },
+  }),
 }
 
-export const useToast = () => {
-  const [toasts, setToasts] = useState([])
+// Toast container component
+export const ToastContainer = () => (
+  <Toaster
+    position="top-right"
+    reverseOrder={false}
+    gutter={8}
+    containerClassName=""
+    containerStyle={{}}
+    toastOptions={{
+      className: '',
+      duration: 4000,
+      style: {
+        background: '#fff',
+        color: '#374151',
+        borderRadius: '12px',
+        padding: '16px',
+        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+      },
+      success: {
+        iconTheme: {
+          primary: '#10B981',
+          secondary: '#fff',
+        },
+      },
+      error: {
+        iconTheme: {
+          primary: '#EF4444',
+          secondary: '#fff',
+        },
+      },
+    }}
+  />
+)
 
-  const showToast = (message, type = 'success', duration = 5000) => {
-    const id = Math.random().toString(36).substr(2, 9)
-    const toast = { id, message, type, duration }
-    
-    setToasts(prev => [...prev, toast])
-  }
-
-  const hideToast = (id) => {
-    setToasts(prev => prev.filter(toast => toast.id !== id))
-  }
-
-  const ToastContainer = () => (
-    <div className="fixed top-4 right-4 z-50 space-y-2">
-      {toasts.map(toast => (
-        <Toast
-          key={toast.id}
-          message={toast.message}
-          type={toast.type}
-          isVisible={true}
-          onClose={() => hideToast(toast.id)}
-          duration={toast.duration}
-        />
-      ))}
-    </div>
-  )
-
-  return { showToast, ToastContainer }
-}
-
-export default Toast
+export default ToastContainer

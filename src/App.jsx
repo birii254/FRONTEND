@@ -1,5 +1,6 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { Routes, Route } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import Layout from './components/Layout'
 import Home from './pages/Home'
 import Marketplace from './pages/Marketplace'
@@ -20,15 +21,29 @@ import BecomeSupplier from './pages/BecomeSupplier'
 import FAQ from './pages/FAQ'
 import OrderProtection from './pages/OrderProtection'
 import { useAuthStore } from './store/authStore'
-import { useToast } from './components/ui/Toast'
+import { ToastContainer } from './components/ui/Toast'
 import ProtectedRoute from './components/ProtectedRoute'
 
+// Create a client
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    },
+  },
+})
+
 function App() {
-  const { isAuthenticated } = useAuthStore()
-  const { ToastContainer } = useToast()
+  const { initialize } = useAuthStore()
+
+  useEffect(() => {
+    initialize()
+  }, [initialize])
 
   return (
-    <>
+    <QueryClientProvider client={queryClient}>
       <Layout>
         <Routes>
           <Route path="/" element={<Home />} />
@@ -58,7 +73,7 @@ function App() {
         </Routes>
       </Layout>
       <ToastContainer />
-    </>
+    </QueryClientProvider>
   )
 }
 
