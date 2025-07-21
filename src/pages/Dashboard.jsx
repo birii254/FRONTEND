@@ -1,25 +1,49 @@
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
 import { itemsAPI } from '../services/api'
 import { useAuthStore } from '../store/authStore'
+import { useApi } from '../hooks/useApi'
+import LoadingSpinner from '../components/ui/LoadingSpinner'
 
 const Dashboard = () => {
   const [activeTab, setActiveTab] = useState('overview')
   const { user } = useAuthStore()
 
-  const { data: userItems, isLoading } = useQuery(
-    'userItems',
-    () => itemsAPI.getItems({ created_by: user?.username }),
-    {
-      select: (response) => response.data,
-      enabled: !!user,
-    }
-  )
+  const { data: userItems, loading: isLoading, error } = useApi(
+    () => itemsAPI.getItems({ created_by: user?.id }),
+    [user?.id],
+    { enabled: !!user }
+  );
 
-  const items = userItems?.results || []
+  const items = userItems?.results || [];
   const activeItems = items.filter(item => item.status === 'active')
   const soldItems = items.filter(item => item.status === 'sold')
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center min-h-[400px]">
+        <LoadingSpinner size="xl" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-16">
+        <div className="text-red-600 mb-4">
+          <i className="fas fa-exclamation-triangle text-4xl"></i>
+        </div>
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Error Loading Dashboard</h2>
+        <p className="text-gray-600 mb-4">{error.message}</p>
+        <button 
+          onClick={() => window.location.reload()} 
+          className="btn-primary"
+        >
+          Try Again
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">

@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
-import axios from 'axios';
 import { useAuthStore } from '../store/authStore';
+import { itemsAPI, categoriesAPI } from '../services/api';
+import { useApi, useFormSubmission } from '../hooks/useApi';
+import { useToast } from '../components/ui/Toast';
 
 const NewItem = () => {
   const navigate = useNavigate();
-  const { user, accessToken } = useAuthStore();
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [categories, setCategories] = useState([]);
+  const { user } = useAuthStore();
+  const { showToast } = useToast();
+  const { submit, loading: isSubmitting, error } = useFormSubmission();
   const [imagePreviews, setImagePreviews] = useState(Array(5).fill(null));
   const [selectedCondition, setSelectedCondition] = useState('');
 
@@ -21,20 +22,16 @@ const NewItem = () => {
     setValue,
   } = useForm();
 
-  // Fetch categories on component mount
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const response = await axios.get('https://birii.onrender.com/api/categories/');
-        setCategories(response.data);
-      } catch (err) {
-        console.error('Failed to fetch categories:', err);
-        setError('Failed to load categories. Please try again.');
+  // Fetch categories
+  const { data: categories, loading: categoriesLoading, error: categoriesError } = useApi(
+    () => categoriesAPI.getCategories(),
+    [],
+    { 
+      onError: (error) => {
+        showToast('Failed to load categories', 'error');
       }
-    };
-
-    fetchCategories();
-  }, []);
+    }
+  );
 
   // Handle image previews
   const handleImageChange = (e, index) => {
@@ -52,59 +49,18 @@ const NewItem = () => {
 
   // Form submission
   const onSubmit = async (data) => {
-    setIsLoading(true);
-    setError('');
-
-    try {
-      const formData = new FormData();
-
-      // Append all fields to formData
-      Object.keys(data).forEach(key => {
-        if (key.startsWith('image_') && data[key] && data[key][0]) {
-          formData.append(key, data[key][0]);
-        } else if (key !== 'image_' && data[key] !== undefined && data[key] !== null) {
-          formData.append(key, data[key]);
+    const result = await submit(
+      () => itemsAPI.createItem(data),
+      {
+        onSuccess: (response) => {
+          showToast('Item created successfully!', 'success');
+          navigate(`/items/${response.data.id}`);
+        },
+        onError: (error) => {
+          showToast(error.message || 'Failed to create item', 'error');
         }
-      });
-
-      const response = await axios.post(
-        'https://birii.onrender.com/api/items/',
-        formData,
-        {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'multipart/form-data',
-          },
-        }
-      );
-
-      navigate(`/items/${response.data.id}`, {
-        state: { message: 'Item created successfully!' }
-      });
-    } catch (err) {
-      if (err.response) {
-        // Handle Django validation errors
-        const errorData = err.response.data;
-        let errorMessages = [];
-
-        if (typeof errorData === 'object') {
-          for (const [field, messages] of Object.entries(errorData)) {
-            if (Array.isArray(messages)) {
-              errorMessages.push(`${field}: ${messages.join(' ')}`);
-            } else {
-              errorMessages.push(`${field}: ${messages}`);
-            }
-          }
-          setError(errorMessages.join('\n'));
-        } else {
-          setError(errorData || 'Item creation failed. Please try again.');
-        }
-      } else {
-        setError('Network error. Please check your connection.');
       }
-    } finally {
-      setIsLoading(false);
-    }
+    );
   };
 
   // Condition options from your Django model
@@ -128,7 +84,7 @@ const NewItem = () => {
               <i className="fas fa-exclamation-triangle text-red-600 mr-2"></i>
               <h3 className="font-semibold text-red-900">Error</h3>
             </div>
-            <p className="mt-1 text-sm text-red-700 whitespace-pre-line">{error}</p>
+            <p className="mt-1 text-sm text-red-700 whitespace-pre-line">{error.message}</p>
           </div>
         )}
 
@@ -143,14 +99,18 @@ const NewItem = () => {
               className={`w-full py-3 px-4 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 ${
                 errors.category ? 'border-red-500' : 'border-gray-300'
               }`}
+              disabled={categoriesLoading}
             >
               <option value="">Select a category</option>
-              {categories.map((category) => (
+              {categories?.map((category) => (
                 <option key={category.id} value={category.id}>
                   {category.name}
                 </option>
               ))}
             </select>
+            {categoriesLoading && (
+              <p className="mt-1 text-sm text-gray-500">Loading categories...</p>
+            )}
             {errors.category && (
               <p className="mt-1 text-sm text-red-600">{errors.category.message}</p>
             )}
@@ -351,10 +311,10 @@ const NewItem = () => {
           <div className="pt-6">
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isSubmitting || categoriesLoading}
               className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-70 disabled:cursor-not-allowed"
             >
-              {isLoading ? (
+              {isSubmitting ? (
                 <>
                   <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>

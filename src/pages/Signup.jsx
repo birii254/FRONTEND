@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
-import axios from 'axios';
+import { useAuthStore } from '../store/authStore';
+import { useToast } from '../components/ui/Toast';
 
 const Signup = () => {
   const navigate = useNavigate();
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const { register: registerUser, isLoading, error, clearError } = useAuthStore();
+  const { showToast } = useToast();
   const [profilePicture, setProfilePicture] = useState(null);
-  const [successMessage, setSuccessMessage] = useState('');
 
   const { 
     register, 
@@ -21,77 +21,38 @@ const Signup = () => {
   const password = watch('password1');
 
   const onSubmit = async (data) => {
-    setIsLoading(true);
-    setError('');
-    setSuccessMessage('');
+    clearError();
 
-    try {
-      const formData = new FormData();
-      
-      // Append all form data
-      formData.append('username', data.username);
-      formData.append('email', data.email);
-      formData.append('first_name', data.first_name);
-      formData.append('last_name', data.last_name);
-      formData.append('password1', data.password1);
-      formData.append('password2', data.password2);
-      formData.append('phone_number', data.phone_number || '');
-      formData.append('location', data.location || '');
-
-      if (profilePicture) {
-        formData.append('profile_picture', profilePicture);
-      }
-
-      const response = await axios.post(
-        'https://birii.onrender.com/api/auth/register/',
-        formData,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-          withCredentials: true,
-        }
-      );
-
-      // Handle successful registration
-      setSuccessMessage('Registration successful! Redirecting to login...');
+    // Prepare form data
+    const formData = {
+      ...data,
+      profile_picture: profilePicture
+    };
+    
+    const result = await registerUser(formData);
+    
+    if (result.success) {
+      showToast('Registration successful!', 'success');
       reset();
       setProfilePicture(null);
       
-      setTimeout(() => {
-        navigate('/login', {
-          state: { 
-            message: 'Account created successfully! Please sign in.' 
-          }
-        });
-      }, 2000);
-
-    } catch (err) {
-      if (err.response) {
-        // Handle Django backend validation errors
-        const errorData = err.response.data;
-        let errorMessages = [];
-
-        // Format Django error responses
-        if (typeof errorData === 'object') {
-          for (const [field, messages] of Object.entries(errorData)) {
-            if (Array.isArray(messages)) {
-              errorMessages.push(`${field}: ${messages.join(' ')}`);
-            } else {
-              errorMessages.push(`${field}: ${messages}`);
+      if (result.requiresLogin) {
+        // Registration successful but requires login
+        setTimeout(() => {
+          navigate('/login', {
+            state: { 
+              message: 'Account created successfully! Please sign in.' 
             }
-          }
-          setError(errorMessages.join('\n'));
-        } else {
-          setError(errorData || 'Registration failed. Please try again.');
-        }
-      } else if (err.request) {
-        setError('Network error. Please check your connection.');
+          });
+        }, 1500);
       } else {
-        setError('An unexpected error occurred.');
+        // Auto-logged in, redirect to dashboard
+        setTimeout(() => {
+          navigate('/dashboard');
+        }, 1500);
       }
-    } finally {
-      setIsLoading(false);
+    } else {
+      showToast(result.error || 'Registration failed. Please try again.', 'error');
     }
   };
 
@@ -114,14 +75,6 @@ const Signup = () => {
         </div>
 
         {/* Success Message */}
-        {successMessage && (
-          <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-            <div className="flex items-center">
-              <i className="fas fa-check-circle text-green-600 mr-2"></i>
-              <p className="text-sm text-green-700">{successMessage}</p>
-            </div>
-          </div>
-        )}
 
         {/* Form */}
         <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-6">
@@ -382,7 +335,7 @@ const Signup = () => {
                 <i className="fas fa-exclamation-triangle text-red-600 mr-2"></i>
                 <h3 className="font-semibold text-red-900">Registration Error</h3>
               </div>
-              <p className="mt-1 text-sm text-red-700 whitespace-pre-line">{error}</p>
+              <p className="mt-1 text-sm text-red-700 whitespace-pre-line">{error.message}</p>
             </div>
           )}
 
