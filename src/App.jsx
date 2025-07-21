@@ -21,10 +21,9 @@ import FAQ from './pages/FAQ'
 import OrderProtection from './pages/OrderProtection'
 import { useAuthStore } from './store/authStore'
 import { useToast } from './components/ui/Toast'
-import ProtectedRoute from './components/ProtectedRoute'
 
 function App() {
-  const { isAuthenticated } = useAuthStore()
+  const { user } = useAuthStore()
   const { ToastContainer } = useToast()
 
   return (
@@ -47,14 +46,18 @@ function App() {
           <Route path="/signup" element={<Signup />} />
           
           {/* Protected Routes */}
-          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-          <Route path="/items/new" element={<ProtectedRoute><NewItem /></ProtectedRoute>} />
-          <Route path="/items/:id/edit" element={<ProtectedRoute><EditItem /></ProtectedRoute>} />
-          <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-          <Route path="/favorites" element={<ProtectedRoute><Favorites /></ProtectedRoute>} />
-          <Route path="/inbox" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
-          <Route path="/inbox/:id" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
-          <Route path="/inbox/new/:itemId" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
+          {user && (
+            <>
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/items/new" element={<NewItem />} />
+              <Route path="/items/:id/edit" element={<EditItem />} />
+              <Route path="/profile" element={<Profile />} />
+              <Route path="/favorites" element={<Favorites />} />
+              <Route path="/inbox" element={<Messages />} />
+              <Route path="/inbox/:id" element={<Messages />} />
+              <Route path="/inbox/new/:itemId" element={<Messages />} />
+            </>
+          )}
         </Routes>
       </Layout>
       <ToastContainer />

@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
+import axios from 'axios';
 import { useAuthStore } from '../store/authStore';
-import { useToast } from '../components/ui/Toast';
 
 const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, isLoading, error, clearError } = useAuthStore();
-  const { showToast } = useToast();
+  const { login } = useAuthStore();
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState(location.state?.message || '');
 
   const { 
@@ -18,22 +19,63 @@ const Login = () => {
   } = useForm();
 
   const onSubmit = async (data) => {
-    clearError();
+    setIsLoading(true);
+    setError('');
     
-    const result = await login({
-      username: data.username,
-      password: data.password
-    });
-    
-    if (result.success) {
-      showToast('Login successful! Welcome back.', 'success');
+    try {
+      // Authenticate with Django backend
+      const response = await axios.post(
+        'https://birii.onrender.com/api/auth/login/',
+        {
+          username: data.username,
+          password: data.password
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          withCredentials: true,
+        }
+      );
+
+      const { access, refresh } = response.data;
+
+      // Fetch user profile
+      const profileResponse = await axios.get(
+        'https://birii.onrender.com/api/auth/profile/',
+        {
+          headers: {
+            'Authorization': `Bearer ${access}`,
+          },
+          withCredentials: true,
+        }
+      );
+
+      // Update auth store and redirect
+      login(profileResponse.data, { access, refresh });
       
+      setSuccessMessage('Login successful! Redirecting...');
       setTimeout(() => {
-        const from = location.state?.from?.pathname || '/dashboard';
-        navigate(from, { replace: true });
-      }, 1000);
-    } else {
-      showToast(result.error || 'Login failed. Please try again.', 'error');
+        navigate('/dashboard');
+      }, 1500);
+
+    } catch (err) {
+      if (err.response) {
+        // Handle Django authentication errors
+        if (err.response.status === 401) {
+          setError('Invalid username or password');
+        } else if (err.response.data?.detail) {
+          setError(err.response.data.detail);
+        } else {
+          setError('Authentication failed. Please try again.');
+        }
+      } else if (err.request) {
+        setError('Network error. Please check your connection.');
+      } else {
+        setError('An unexpected error occurred.');
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -128,7 +170,7 @@ const Login = () => {
                   <i className="fas fa-exclamation-triangle text-red-600 mr-2"></i>
                   <h3 className="font-semibold text-red-900">Sign in failed</h3>
                 </div>
-                <p className="mt-1 text-sm text-red-700">{error.message}</p>
+                <p className="mt-1 text-sm text-red-700">{error}</p>
               </div>
             )}
 

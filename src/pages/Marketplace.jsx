@@ -1,8 +1,7 @@
 import React, { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { itemsAPI, categoriesAPI } from '../services/api'
-import { useApi } from '../hooks/useApi'
-import LoadingSpinner from '../components/ui/LoadingSpinner'
 
 const Marketplace = () => {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -13,20 +12,27 @@ const Marketplace = () => {
   const category = searchParams.get('category') || ''
   const page = searchParams.get('page') || 1
 
-  const { data: items, loading: itemsLoading, error: itemsError } = useApi(
+  const { data: items, isLoading: itemsLoading } = useQuery(
+    ['items', { query, category, page }],
     () => itemsAPI.getItems({ 
       search: query, 
       category: category,
       page: page,
       status: 'active',
+      admin_approved: true
     }),
-    [query, category, page]
-  );
+    {
+      select: (response) => response.data,
+    }
+  )
 
-  const { data: categories, loading: categoriesLoading } = useApi(
-    () => categoriesAPI.getCategories(),
-    []
-  );
+  const { data: categories, isLoading: categoriesLoading } = useQuery(
+    ['categories'],
+    categoriesAPI.getCategories,
+    {
+      select: (response) => response.data,
+    }
+  )
 
   const handleSearch = (e) => {
     e.preventDefault()
@@ -176,20 +182,6 @@ const Marketplace = () => {
                   <div className="bg-gray-300 h-4 rounded w-2/3"></div>
                 </div>
               ))}
-            </div>
-          ) : itemsError ? (
-            <div className="text-center py-16">
-              <div className="text-red-600 mb-4">
-                <i className="fas fa-exclamation-triangle text-4xl"></i>
-              </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">Error Loading Items</h3>
-              <p className="text-gray-600 mb-4">{itemsError.message}</p>
-              <button 
-                onClick={() => window.location.reload()} 
-                className="btn-primary"
-              >
-                Try Again
-              </button>
             </div>
           ) : viewMode === 'grid' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
