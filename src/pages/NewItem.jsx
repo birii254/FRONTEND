@@ -1,307 +1,376 @@
-import React, { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useForm } from 'react-hook-form'
-import { useQuery } from "@tanstack/react-query";
-import { categoriesAPI, itemsAPI } from '../services/api'
-import { useAuthStore } from '../store/authStore'
-import Card from '../components/ui/Card'
-import Button from '../components/ui/Button'
-import Input from '../components/ui/Input'
-import ImageUpload from '../components/ui/ImageUpload'
-import LoadingSpinner from '../components/ui/LoadingSpinner'
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import axios from 'axios';
+import { useAuthStore } from '../store/authStore';
 
 const NewItem = () => {
-  const navigate = useNavigate()
-  const { user } = useAuthStore()
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [images, setImages] = useState([])
+  const navigate = useNavigate();
+  const { user, accessToken } = useAuthStore();
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [categories, setCategories] = useState([]);
+  const [imagePreviews, setImagePreviews] = useState(Array(5).fill(null));
+  const [selectedCondition, setSelectedCondition] = useState('');
 
-  const { register, handleSubmit, formState: { errors }, watch } = useForm({
-    defaultValues: {
-      condition: 'good',
-      delivery_available: false,
-      pickup_available: true,
-      is_negotiable: true,
-    }
-  })
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    watch,
+    setValue,
+  } = useForm();
 
-  // Fetch categories
-  const { data: categories, isLoading: categoriesLoading } = useQuery(
-    ['categories'],
-    categoriesAPI.getCategories,
-    {
-      select: (response) => response.data,
-      onError: (error) => {
-        console.error('Error fetching categories:', error);
+  // Fetch categories on component mount
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await axios.get('https://birii.onrender.com/api/categories/');
+        setCategories(response.data);
+      } catch (err) {
+        console.error('Failed to fetch categories:', err);
+        setError('Failed to load categories. Please try again.');
       }
+    };
+
+    fetchCategories();
+  }, []);
+
+  // Handle image previews
+  const handleImageChange = (e, index) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const newPreviews = [...imagePreviews];
+        newPreviews[index] = reader.result;
+        setImagePreviews(newPreviews);
+      };
+      reader.readAsDataURL(file);
     }
-  )
+  };
 
-  // Fallback categories if API fails
-  const fallbackCategories = [
-    { id: 1, name: 'Electronics & Appliances' },
-    { id: 2, name: 'Fashion & Beauty' },
-    { id: 3, name: 'Home & Furniture' },
-    { id: 4, name: 'Vehicles & Auto Parts' },
-    { id: 5, name: 'Property & Real Estate' },
-    { id: 6, name: 'Jobs & Services' },
-    { id: 7, name: 'Agriculture & Food' },
-    { id: 8, name: 'Health & Wellness' },
-    { id: 9, name: 'Kids & Baby' },
-    { id: 10, name: 'Education & Training' },
-    { id: 11, name: 'Events & Entertainment' },
-    { id: 12, name: 'Others' }
-  ]
-
-  const displayCategories = categories || fallbackCategories
-
+  // Form submission
   const onSubmit = async (data) => {
-    if (!user) {
-      navigate('/login')
-      return
-    }
+    setIsLoading(true);
+    setError('');
 
-    setIsSubmitting(true)
     try {
-      const formData = new FormData()
-      
-      // Add text fields
+      const formData = new FormData();
+
+      // Append all fields to formData
       Object.keys(data).forEach(key => {
-        if (!key.startsWith('image') && data[key] !== null && data[key] !== undefined) {
-          formData.append(key, data[key])
+        if (key.startsWith('image_') && data[key] && data[key][0]) {
+          formData.append(key, data[key][0]);
+        } else if (key !== 'image_' && data[key] !== undefined && data[key] !== null) {
+          formData.append(key, data[key]);
         }
-      })
-      
-      // Add images
-      images.forEach((image, index) => {
-        if (image.file) {
-          const fieldName = index === 0 ? 'image' : `image_${index + 1}`
-          formData.append(fieldName, image.file)
-        }
-      })
+      });
 
-      const response = await itemsAPI.createItem(formData)
-      navigate(`/items/${response.data.id}`)
-    } catch (error) {
-      console.error('Error creating item:', error)
-      alert('Failed to create item. Please try again.')
+      const response = await axios.post(
+        'https://birii.onrender.com/api/items/',
+        formData,
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'multipart/form-data',
+          },
+        }
+      );
+
+      navigate(`/items/${response.data.id}`, {
+        state: { message: 'Item created successfully!' }
+      });
+    } catch (err) {
+      if (err.response) {
+        // Handle Django validation errors
+        const errorData = err.response.data;
+        let errorMessages = [];
+
+        if (typeof errorData === 'object') {
+          for (const [field, messages] of Object.entries(errorData)) {
+            if (Array.isArray(messages)) {
+              errorMessages.push(`${field}: ${messages.join(' ')}`);
+            } else {
+              errorMessages.push(`${field}: ${messages}`);
+            }
+          }
+          setError(errorMessages.join('\n'));
+        } else {
+          setError(errorData || 'Item creation failed. Please try again.');
+        }
+      } else {
+        setError('Network error. Please check your connection.');
+      }
     } finally {
-      setIsSubmitting(false)
+      setIsLoading(false);
     }
-  }
+  };
 
-  if (!user) {
-    navigate('/login')
-    return null
-  }
+  // Condition options from your Django model
+  const conditionOptions = [
+    { value: '', label: 'Select condition' },
+    { value: 'new', label: 'Brand New' },
+    { value: 'used_like_new', label: 'Used - Like New' },
+    { value: 'used_good', label: 'Used - Good' },
+    { value: 'used_fair', label: 'Used - Fair' },
+    { value: 'for_parts', label: 'For Parts/Not Working' },
+  ];
 
   return (
-    <div className="max-w-2xl mx-auto">
-      {/* Header */}
-      <div className="text-center mb-8 animate-fade-in">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Create New Listing</h1>
-        <p className="text-gray-600">Fill in the details below to list your item</p>
-      </div>
+    <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+      <div className="bg-white shadow rounded-lg p-6">
+        <h2 className="text-2xl font-bold text-gray-900 mb-6">List New Item</h2>
+        
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
+            <div className="flex items-center">
+              <i className="fas fa-exclamation-triangle text-red-600 mr-2"></i>
+              <h3 className="font-semibold text-red-900">Error</h3>
+            </div>
+            <p className="mt-1 text-sm text-red-700 whitespace-pre-line">{error}</p>
+          </div>
+        )}
 
-      {/* Form */}
-      <Card className="p-8 animate-slide-up">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-          {/* Image Upload */}
-          <ImageUpload
-            images={images}
-            onImagesChange={setImages}
-            maxImages={5}
-          />
-
           {/* Category */}
-          <div className="space-y-2">
-            <label className="block text-sm font-semibold text-gray-900">
-              <i className="fas fa-tag text-primary-600 mr-2"></i>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               Category *
             </label>
             <select
-              {...register('category', { required: 'Please select a category' })}
-              className="w-full py-4 px-6 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200"
-              disabled={categoriesLoading}
+              {...register('category', { required: 'Category is required' })}
+              className={`w-full py-3 px-4 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 ${
+                errors.category ? 'border-red-500' : 'border-gray-300'
+              }`}
             >
               <option value="">Select a category</option>
-              {displayCategories?.map((category) => (
+              {categories.map((category) => (
                 <option key={category.id} value={category.id}>
                   {category.name}
                 </option>
               ))}
             </select>
             {errors.category && (
-              <p className="text-sm text-red-600">{errors.category.message}</p>
+              <p className="mt-1 text-sm text-red-600">{errors.category.message}</p>
             )}
           </div>
 
           {/* Item Name */}
-          <Input
-            label="Item Name *"
-            icon="fas fa-box"
-            placeholder="Enter item name..."
-            {...register('name', { required: 'Item name is required' })}
-            error={errors.name?.message}
-          />
-
-          {/* Description */}
-          <div className="space-y-2">
-            <label className="block text-sm font-semibold text-gray-900">
-              <i className="fas fa-align-left text-primary-600 mr-2"></i>
-              Description
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Item Name *
             </label>
-            <textarea
-              {...register('description')}
-              rows={6}
-              className="w-full py-4 px-6 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200"
-              placeholder="Describe your item in detail..."
+            <input
+              type="text"
+              {...register('name', { required: 'Item name is required' })}
+              className={`w-full py-3 px-4 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 ${
+                errors.name ? 'border-red-500' : 'border-gray-300'
+              }`}
+              placeholder="Enter item name..."
             />
-            <p className="text-xs text-gray-500 mt-2">Provide detailed information about your item's condition, features, and any relevant details.</p>
+            {errors.name && (
+              <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>
+            )}
           </div>
 
-          {/* Location */}
-          <Input
-            label="Location *"
-            icon="fas fa-map-marker-alt"
-            placeholder="Enter your location..."
-            {...register('location', { required: 'Location is required' })}
-            error={errors.location?.message}
-          />
+          {/* Description */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Description *
+            </label>
+            <textarea
+              {...register('description', { required: 'Description is required' })}
+              rows={6}
+              className={`w-full py-3 px-4 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 ${
+                errors.description ? 'border-red-500' : 'border-gray-300'
+              }`}
+              placeholder="Describe your item in detail..."
+            />
+            {errors.description && (
+              <p className="mt-1 text-sm text-red-600">{errors.description.message}</p>
+            )}
+          </div>
 
           {/* Price */}
-          <div className="space-y-2">
-            <label className="block text-sm font-semibold text-gray-900">
-              <i className="fas fa-dollar-sign text-primary-600 mr-2"></i>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               Price (KSh) *
             </label>
-            <div className="relative">
-              <span className="absolute left-6 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">KSh</span>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                {...register('price', { 
-                  required: 'Price is required',
-                  min: { value: 0, message: 'Price must be positive' }
-                })}
-                className="w-full py-4 px-6 pl-16 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200"
-                placeholder="0.00"
-              />
-            </div>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              {...register('price', { 
+                required: 'Price is required',
+                min: { value: 0, message: 'Price must be positive' }
+              })}
+              className={`w-full py-3 px-4 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 ${
+                errors.price ? 'border-red-500' : 'border-gray-300'
+              }`}
+              placeholder="0.00"
+            />
             {errors.price && (
-              <p className="text-sm text-red-600">{errors.price.message}</p>
+              <p className="mt-1 text-sm text-red-600">{errors.price.message}</p>
             )}
           </div>
 
           {/* Condition */}
-          <div className="space-y-2">
-            <label className="block text-sm font-semibold text-gray-900">
-              <i className="fas fa-star text-primary-600 mr-2"></i>
-              Condition
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Condition *
             </label>
-            <select 
-              {...register('condition')} 
-              className="w-full py-4 px-6 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200"
+            <select
+              {...register('condition', { required: 'Condition is required' })}
+              value={selectedCondition}
+              onChange={(e) => {
+                setSelectedCondition(e.target.value);
+                setValue('condition', e.target.value);
+              }}
+              className={`w-full py-3 px-4 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 ${
+                errors.condition ? 'border-red-500' : 'border-gray-300'
+              }`}
             >
-              <option value="new">Brand New</option>
-              <option value="like_new">Like New</option>
-              <option value="excellent">Excellent</option>
-              <option value="good">Good</option>
-              <option value="fair">Fair</option>
-              <option value="poor">Poor</option>
+              {conditionOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
+            {errors.condition && (
+              <p className="mt-1 text-sm text-red-600">{errors.condition.message}</p>
+            )}
           </div>
 
-          {/* Options */}
+          {/* Location */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Location *
+            </label>
+            <input
+              type="text"
+              {...register('location', { required: 'Location is required' })}
+              className={`w-full py-3 px-4 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 ${
+                errors.location ? 'border-red-500' : 'border-gray-300'
+              }`}
+              placeholder="Enter your location..."
+            />
+            {errors.location && (
+              <p className="mt-1 text-sm text-red-600">{errors.location.message}</p>
+            )}
+          </div>
+
+          {/* Delivery Options */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-              <i className="fas fa-truck text-primary-600 mr-2"></i>
-              Delivery & Pickup Options
-            </h3>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Delivery Options
+            </label>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-xl hover:bg-gray-50 cursor-pointer transition-colors duration-200">
-                <input
-                  type="checkbox"
-                  {...register('delivery_available')}
-                  className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                />
-                <div>
-                  <span className="text-sm font-medium text-gray-900">Delivery Available</span>
-                  <p className="text-xs text-gray-500">Offer delivery service</p>
-                </div>
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="delivery_available"
+                {...register('delivery_available')}
+                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+              />
+              <label htmlFor="delivery_available" className="ml-2 block text-sm text-gray-700">
+                Delivery Available
               </label>
-              
-              <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-xl hover:bg-gray-50 cursor-pointer transition-colors duration-200">
-                <input
-                  type="checkbox"
-                  {...register('pickup_available')}
-                  className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                />
-                <div>
-                  <span className="text-sm font-medium text-gray-900">Pickup Available</span>
-                  <p className="text-xs text-gray-500">Allow local pickup</p>
-                </div>
+            </div>
+            
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="pickup_available"
+                {...register('pickup_available')}
+                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+              />
+              <label htmlFor="pickup_available" className="ml-2 block text-sm text-gray-700">
+                Pickup Available
               </label>
-              
-              <label className="flex items-center space-x-3 p-4 border border-gray-200 rounded-xl hover:bg-gray-50 cursor-pointer transition-colors duration-200">
-                <input
-                  type="checkbox"
-                  {...register('is_negotiable')}
-                  className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                />
-                <div>
-                  <span className="text-sm font-medium text-gray-900">Price Negotiable</span>
-                  <p className="text-xs text-gray-500">Open to offers</p>
-                </div>
+            </div>
+            
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="is_negotiable"
+                {...register('is_negotiable')}
+                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+              />
+              <label htmlFor="is_negotiable" className="ml-2 block text-sm text-gray-700">
+                Price is Negotiable
               </label>
             </div>
           </div>
 
+          {/* Images */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Images (First image will be the main image)
+            </label>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {[1, 2, 3, 4, 5].map((num) => (
+                <div key={num} className="space-y-2">
+                  <label className="block text-xs text-gray-500">
+                    {num === 1 ? 'Main Image *' : `Image ${num}`}
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="file"
+                      id={`image_${num}`}
+                      accept="image/*"
+                      {...register(num === 1 ? 'image' : `image_${num}`)}
+                      onChange={(e) => handleImageChange(e, num - 1)}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    />
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg h-32 flex items-center justify-center">
+                      {imagePreviews[num - 1] ? (
+                        <img
+                          src={imagePreviews[num - 1]}
+                          alt={`Preview ${num}`}
+                          className="h-full w-full object-cover rounded-lg"
+                        />
+                      ) : (
+                        <div className="text-center p-4">
+                          <i className="fas fa-camera text-gray-400 text-2xl mb-1"></i>
+                          <p className="text-xs text-gray-500">Click to upload</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {errors.image && (
+              <p className="mt-1 text-sm text-red-600">{errors.image.message}</p>
+            )}
+          </div>
+
           {/* Submit Button */}
-          <div className="flex items-center justify-between pt-6 border-t border-gray-200">
-            <Button
-              variant="secondary"
-              onClick={() => navigate('/dashboard')}
-            >
-              <i className="fas fa-arrow-left mr-2"></i>
-              Cancel
-            </Button>
-            <Button
+          <div className="pt-6">
+            <button
               type="submit"
-              loading={isSubmitting}
-              disabled={isSubmitting}
+              disabled={isLoading}
+              className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-70 disabled:cursor-not-allowed"
             >
-              <i className="fas fa-check mr-2"></i>
-              {isSubmitting ? 'Creating...' : 'List Item'}
-            </Button>
+              {isLoading ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Creating Listing...
+                </>
+              ) : (
+                'Create Listing'
+              )}
+            </button>
           </div>
         </form>
-      </Card>
-
-      {/* Tips */}
-      <Card className="mt-8 bg-blue-50 border border-blue-200 p-6 animate-slide-up">
-        <h3 className="font-semibold text-blue-900 mb-3 flex items-center">
-          <i className="fas fa-lightbulb mr-2"></i>
-          Tips for a Great Listing
-        </h3>
-        <ul className="space-y-2 text-sm text-blue-800">
-          {[
-            "Use high-quality, well-lit photos from multiple angles",
-            "Write a detailed, honest description of the item's condition",
-            "Research similar items to set a competitive price",
-            "Respond quickly to buyer inquiries to build trust"
-          ].map((tip, index) => (
-            <li key={index} className="flex items-start space-x-2">
-            <i className="fas fa-check text-blue-600 mt-0.5"></i>
-              <span>{tip}</span>
-            </li>
-          ))}
-        </ul>
-      </Card>
+      </div>
     </div>
-  )
-}
+  );
+};
 
-export default NewItem
+export default NewItem;
